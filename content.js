@@ -1,6 +1,8 @@
 let isHighlighting = false;
 let highlightContainer = null;
 let elementColorMap = new Map(); // Store colors for element types
+let debounceTimer = null;
+let mutationDebounceTimer = null;
 
 // Function to get a random color
 function getRandomColor() {
@@ -45,6 +47,14 @@ function createHighlightContainer() {
 // Function to create a bounding box element
 function createBoundingBox(element) {
     const rect = element.getBoundingClientRect();
+    
+    // Skip elements outside viewport or too small
+    if (rect.bottom < 0 || rect.right < 0 || 
+        rect.top > window.innerHeight || rect.left > window.innerWidth ||
+        rect.width < 10 || rect.height < 10) {
+        return null;
+    }
+    
     const box = document.createElement('div');
     box.style.position = 'absolute';
     box.style.left = `${rect.left + window.scrollX}px`;
@@ -59,24 +69,27 @@ function createBoundingBox(element) {
     return box;
 }
 
-// Function to update highlight positions
-function updateHighlightPositions() {
-    const boxes = document.getElementsByClassName('dom-highlight-box');
-    const elements = document.getElementsByTagName('*');
-    
-    for (let i = 0; i < boxes.length; i++) {
-        const element = elements[i];
-        if (element && element.className !== 'dom-highlight-box' && !element.id.includes('dom-highlight')) {
-            const rect = element.getBoundingClientRect();
-            boxes[i].style.left = `${rect.left + window.scrollX}px`;
-            boxes[i].style.top = `${rect.top + window.scrollY}px`;
-            boxes[i].style.width = `${rect.width}px`;
-            boxes[i].style.height = `${rect.height}px`;
-        }
-    }
+// Debounce function to limit how often a function is called
+function debounce(func, delay) {
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            func.apply(context, args);
+        }, delay);
+    };
 }
 
-// Function to highlight all elements
+// Function to update highlight positions (debounced)
+const updateHighlightPositions = debounce(() => {
+    if (!highlightContainer) return;
+    
+    removeHighlights();
+    highlightElements();
+}, 100);
+
+// Function to highlight visible elements
 function highlightElements() {
     // Clear the color map for new page
     elementColorMap.clear();
@@ -84,25 +97,50 @@ function highlightElements() {
     // Create container if it doesn't exist
     if (!highlightContainer) {
         highlightContainer = createHighlightContainer();
+    } else {
+        // Clear existing highlights but keep the container
+        while (highlightContainer.firstChild) {
+            highlightContainer.removeChild(highlightContainer.firstChild);
+        }
     }
 
-    const elements = document.getElementsByTagName('*');
-    for (let element of elements) {
-        // Skip the highlight boxes and container
-        if (element.className === 'dom-highlight-box' || element.id === 'dom-highlight-container') continue;
-        
-        // Skip elements with no dimensions
-        const rect = element.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) continue;
-        
-        const box = createBoundingBox(element);
-        highlightContainer.appendChild(box);
-    }
+    // Get only the main visible elements - limit to 500 max
+    const allElements = document.querySelectorAll('div, section, article, header, footer, nav, main, aside, button, a, form, input, img, h1, h2, h3');
+    const elementsArray = Array.from(allElements).slice(0, 500);
+
+    // Process elements in batches
+    processBatch(elementsArray, 0);
 
     // Add scroll event listener
     window.addEventListener('scroll', updateHighlightPositions);
     // Add resize event listener
     window.addEventListener('resize', updateHighlightPositions);
+}
+
+// Process elements in batches to avoid UI freezing
+function processBatch(elements, startIndex, batchSize = 50) {
+    if (!highlightContainer || !isHighlighting) return;
+    
+    const endIndex = Math.min(startIndex + batchSize, elements.length);
+    
+    for (let i = startIndex; i < endIndex; i++) {
+        const element = elements[i];
+        
+        // Skip the highlight boxes and container
+        if (element.className === 'dom-highlight-box' || element.id === 'dom-highlight-container') continue;
+        
+        const box = createBoundingBox(element);
+        if (box) {
+            highlightContainer.appendChild(box);
+        }
+    }
+    
+    // Process next batch if there are more elements
+    if (endIndex < elements.length) {
+        setTimeout(() => {
+            processBatch(elements, endIndex, batchSize);
+        }, 0);
+    }
 }
 
 // Function to remove all highlights
@@ -147,18 +185,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-// Re-apply highlighting when the page content changes
-const observer = new MutationObserver(() => {
+// Debounced mutation handler
+const handleMutation = debounce(() => {
     if (isHighlighting) {
         removeHighlights();
         highlightElements();
     }
+}, 500);
+
+// Re-apply highlighting when the page content changes
+const observer = new MutationObserver(() => {
+    handleMutation();
 });
 
-// Start observing the document with the configured parameters
+// Start observing the document with optimized parameters
 observer.observe(document.body, {
     childList: true,
-    subtree: true
+    subtree: true,
+    attributes: false,
+    characterData: false
 });
 
 // Re-apply highlighting when navigation occurs within SPA
