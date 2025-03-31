@@ -128,6 +128,15 @@
         </div>
         <div class="status-text" id="statusText"></div>
     </div>
+
+    <div class="element-id-form">
+        <label for="maxElements">Maximum Elements to Highlight:</label>
+        <div class="input-group">
+            <input type="number" id="maxElements" class="input-field" value="100" min="1" max="1000">
+            <button id="updateMaxElementsBtn" class="button" style="width: auto; margin-top: 0; margin-left: 5px;">Update</button>
+        </div>
+        <div class="status-text">Default: 100. Higher values may affect performance.</div>
+    </div>
     
     <script src="popup.js"></script>
 </body>

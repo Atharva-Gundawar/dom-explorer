@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const elementIdInput = document.getElementById('elementId');
     const highlightElementBtn = document.getElementById('highlightElementBtn');
     const statusText = document.getElementById('statusText');
+    const maxElementsInput = document.getElementById('maxElements');
+    const updateMaxElementsBtn = document.getElementById('updateMaxElementsBtn');
     
     /**
      * Updates the status message in the popup
@@ -196,6 +198,36 @@ document.addEventListener('DOMContentLoaded', function() {
         if (event.key === 'Enter') {
             highlightElementBtn.click();
         }
+    });
+    
+    /**
+     * Handles updating the maximum number of elements to highlight
+     */
+    updateMaxElementsBtn.addEventListener('click', function() {
+        const maxElements = parseInt(maxElementsInput.value);
+        if (isNaN(maxElements) || maxElements < 1) {
+            updateStatus('Please enter a valid number');
+            return;
+        }
+        
+        updateStatus('Updating maximum elements...');
+        sendMessageToContentScript({
+            action: 'updateMaxElements',
+            maxElements: maxElements
+        }, function(response) {
+            if (response && response.success) {
+                updateStatus(`Maximum elements updated to ${maxElements}`);
+                // If highlighting is active, refresh it
+                if (toggleCheckbox.checked) {
+                    sendMessageToContentScript({
+                        action: 'toggleHighlight',
+                        forceState: true
+                    });
+                }
+            } else {
+                updateStatus('Failed to update maximum elements');
+            }
+        });
     });
     
     // Initialize the popup

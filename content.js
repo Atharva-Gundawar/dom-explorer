@@ -12,6 +12,7 @@ let elementColorMap = new Map(); // Store colors for element types
 let debounceTimer = null;
 let mutationDebounceTimer = null;
 let domElementsMap = new Map(); // Map to store dom elements by unique ID
+let maxElementsToHighlight = 100; // Default maximum elements to highlight
 
 // Debug mode - set to false for production
 const DEBUG_MODE = true;
@@ -257,7 +258,7 @@ function createHighlightContainer() {
         container.style.width = '100%';
         container.style.height = '100%';
         container.style.pointerEvents = 'none';
-        container.style.zIndex = '10000';
+        container.style.zIndex = '2147483647'; // Maximum possible z-index value
         container.id = 'dom-highlight-container';
         document.body.appendChild(container);
         return container;
@@ -288,8 +289,9 @@ function createBoundingBox(element) {
         box.style.width = `${rect.width}px`;
         box.style.height = `${rect.height}px`;
         box.style.border = '2px solid ' + getColorForElement(element);
-        box.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+        box.style.backgroundColor = 'transparent';
         box.style.pointerEvents = 'none';
+        box.style.zIndex = '2147483646'; // One less than container to ensure proper stacking
         box.className = 'dom-highlight-box';
         return box;
     } catch (e) {
@@ -390,10 +392,10 @@ function highlightElements() {
     try {
         // Select the most common important elements
         const mainElements = document.querySelectorAll('div, p, h1, h2, h3, h4, h5, h6, a, button, img, input, form, section, article, nav, aside');
-        debug(`Found ${mainElements.length} elements to highlight`);
+        debug(`Found ${mainElements.length} elements to highlight (limiting to ${maxElementsToHighlight})`);
         
-        // Process only the first 100 elements for now to prevent performance issues
-        const elements = Array.from(mainElements).slice(0, 100);
+        // Process elements up to the maximum limit
+        const elements = Array.from(mainElements).slice(0, maxElementsToHighlight);
         
         // Process elements immediately
         for (let i = 0; i < elements.length; i++) {
@@ -641,6 +643,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             case 'highlightElementById':
                 const highlighted = highlightElementById(request.elementId);
                 sendResponse({success: highlighted});
+                break;
+            case 'updateMaxElements':
+                maxElementsToHighlight = Math.max(1, Math.min(1000, request.maxElements));
+                debug(`Updated maxElementsToHighlight to ${maxElementsToHighlight}`);
+                sendResponse({success: true});
                 break;
         }
     } catch (e) {
