@@ -3,7 +3,7 @@
 <head>
     <style>
         body {
-            width: 200px;
+            width: 250px;
             padding: 15px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
         }
@@ -62,20 +62,73 @@
 
         .title {
             font-size: 16px;
-            margin: 0;
+            margin: 0 0 15px 0;
             color: #333;
+        }
+
+        .button {
+            width: 100%;
+            padding: 8px 10px;
+            margin-top: 10px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .button:hover {
+            background-color: #3b78e7;
+        }
+        
+        .element-id-form {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .input-group {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        .input-field {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .status-text {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
         }
     </style>
 </head>
 <body>
     <h2 class="title">DOM Highlighter</h2>
     <div class="toggle-container">
-        <span>Highlight Elements</span>
+        <span>Highlight All Elements</span>
         <label class="switch">
             <input type="checkbox" id="highlightToggle">
             <span class="slider"></span>
         </label>
     </div>
+    
+    <button id="downloadBtn" class="button">Download Website Tree</button>
+    
+    <div class="element-id-form">
+        <label for="elementId">Highlight Specific Element:</label>
+        <div class="input-group">
+            <input type="text" id="elementId" class="input-field" placeholder="Enter element ID">
+            <button id="highlightElementBtn" class="button" style="width: auto; margin-top: 0; margin-left: 5px;">Go</button>
+        </div>
+        <div class="status-text" id="statusText"></div>
+    </div>
+    
     <script src="popup.js"></script>
 </body>
 </html> 

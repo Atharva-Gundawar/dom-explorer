@@ -7,23 +7,10 @@ debug('Popup script loaded');
 
 document.addEventListener('DOMContentLoaded', function() {
     const toggleCheckbox = document.getElementById('highlightToggle');
-    const statusText = document.createElement('div');
-    statusText.style.marginTop = '10px';
-    statusText.style.fontSize = '12px';
-    statusText.style.color = '#666';
-    document.body.appendChild(statusText);
-    
-    const downloadBtn = document.createElement('button');
-    downloadBtn.textContent = 'Download Website Tree';
-    downloadBtn.style.marginTop = '10px';
-    downloadBtn.style.padding = '5px 10px';
-    downloadBtn.style.width = '100%';
-    downloadBtn.style.backgroundColor = '#4285f4';
-    downloadBtn.style.color = 'white';
-    downloadBtn.style.border = 'none';
-    downloadBtn.style.borderRadius = '4px';
-    downloadBtn.style.cursor = 'pointer';
-    document.body.appendChild(downloadBtn);
+    const downloadBtn = document.getElementById('downloadBtn');
+    const elementIdInput = document.getElementById('elementId');
+    const highlightElementBtn = document.getElementById('highlightElementBtn');
+    const statusText = document.getElementById('statusText');
     
     function updateStatus(message) {
         statusText.textContent = message;
@@ -86,15 +73,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize the popup
     function initPopup() {
         debug('Initializing popup');
-        updateStatus('Checking highlighting state...');
+        updateStatus('Ready');
         
         // Check if highlighting is active
         sendMessageToContentScript({action: 'getState'}, function(response) {
             if (response && response.isHighlighting !== undefined) {
                 toggleCheckbox.checked = response.isHighlighting;
-                updateStatus(response.isHighlighting ? 'Highlighting active' : 'Highlighting inactive');
-            } else {
-                updateStatus('Ready');
+                updateStatus(response.isHighlighting ? 'Highlighting active' : 'Ready');
             }
         });
     }
@@ -103,13 +88,18 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleCheckbox.addEventListener('change', function() {
         updateStatus(toggleCheckbox.checked ? 'Activating...' : 'Deactivating...');
         
+        // Disable the element ID input when highlighting all elements
+        if (toggleCheckbox.checked) {
+            elementIdInput.value = '';
+        }
+        
         sendMessageToContentScript({
             action: 'toggleHighlight',
             forceState: toggleCheckbox.checked
         }, function(response) {
             if (response && response.isHighlighting !== undefined) {
                 toggleCheckbox.checked = response.isHighlighting;
-                updateStatus(response.isHighlighting ? 'Highlighting active' : 'Highlighting inactive');
+                updateStatus(response.isHighlighting ? 'Highlighting active' : 'Ready');
             }
         });
     });
@@ -124,6 +114,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateStatus(response && response.error ? response.error : 'Failed to generate tree');
             }
         });
+    });
+    
+    // Add highlight specific element handler
+    highlightElementBtn.addEventListener('click', function() {
+        const elementId = elementIdInput.value.trim();
+        if (!elementId) {
+            updateStatus('Please enter an element ID');
+            return;
+        }
+        
+        // Uncheck the highlight all checkbox
+        toggleCheckbox.checked = false;
+        
+        updateStatus(`Highlighting element: ${elementId}...`);
+        sendMessageToContentScript({
+            action: 'highlightElementById',
+            elementId: elementId
+        }, function(response) {
+            if (response && response.success) {
+                updateStatus(`Element highlighted: ${elementId}`);
+            } else {
+                updateStatus(response && response.error ? response.error : `Element not found: ${elementId}`);
+            }
+        });
+    });
+    
+    // Also trigger highlight on Enter key in the input field
+    elementIdInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            highlightElementBtn.click();
+        }
     });
     
     // Initialize

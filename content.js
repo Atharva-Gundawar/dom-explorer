@@ -3,6 +3,7 @@ let highlightContainer = null;
 let elementColorMap = new Map(); // Store colors for element types
 let debounceTimer = null;
 let mutationDebounceTimer = null;
+let domElementsMap = new Map(); // Map to store dom elements by unique ID
 
 // Debug function
 function debug(message) {
@@ -20,6 +21,11 @@ function getRandomColor() {
         color += letters[Math.floor(Math.random() * 16)];
     }
     return color;
+}
+
+// Function to generate a unique ID for DOM elements
+function generateUniqueId() {
+    return 'dom_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
 }
 
 // Function to get element signature (for consistent coloring)
@@ -112,6 +118,57 @@ const updateHighlightPositions = debounce(() => {
     highlightElements();
 }, 100);
 
+// Function to highlight a specific element by ID
+function highlightElementById(uniqueId) {
+    debug(`Highlighting element with ID: ${uniqueId}`);
+    
+    // Safety check for document.body
+    if (!document.body) {
+        debug('Document body not available');
+        return false;
+    }
+    
+    // Clear existing highlights
+    removeHighlights();
+    
+    // Try to find the element
+    const element = domElementsMap.get(uniqueId);
+    if (!element) {
+        debug(`Element with ID ${uniqueId} not found`);
+        return false;
+    }
+    
+    // Create container
+    highlightContainer = createHighlightContainer();
+    if (!highlightContainer) {
+        debug('Failed to create container');
+        return false;
+    }
+    
+    // Highlight the element
+    try {
+        const box = createBoundingBox(element);
+        if (box && highlightContainer) {
+            // Use a distinctive color for the single highlighted element
+            box.style.border = '3px solid red';
+            box.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+            highlightContainer.appendChild(box);
+            
+            // Scroll the element into view
+            element.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+            
+            return true;
+        }
+    } catch (e) {
+        debug(`Error highlighting element: ${e.message}`);
+    }
+    
+    return false;
+}
+
 // Function to highlight visible elements
 function highlightElements() {
     debug('Highlighting elements');
@@ -192,7 +249,14 @@ function toggleHighlight(forceState = null) {
 
 // Function to extract important information from an element
 function extractElementInfo(element) {
+    // Generate a unique ID for this element
+    const uniqueId = generateUniqueId();
+    
+    // Store a reference to the element for later highlighting
+    domElementsMap.set(uniqueId, element);
+    
     const info = {
+        uniqueId: uniqueId,
         tag: element.tagName.toLowerCase(),
         id: element.id || null,
         classes: Array.from(element.classList || []),
@@ -299,6 +363,9 @@ function downloadDomTree() {
     debug('Generating DOM tree');
     
     try {
+        // Clear the previous map
+        domElementsMap.clear();
+        
         // Generate the DOM tree with a reasonable depth limit
         const tree = {
             title: document.title,
@@ -351,6 +418,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             case 'downloadDomTree':
                 const success = downloadDomTree();
                 sendResponse({success});
+                break;
+            case 'highlightElementById':
+                const highlighted = highlightElementById(request.elementId);
+                sendResponse({success: highlighted});
                 break;
         }
     } catch (e) {
