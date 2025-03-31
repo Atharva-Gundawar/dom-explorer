@@ -1,22 +1,46 @@
-// Debug function
+/**
+ * DOM Element Highlighter - Popup Script
+ * This script handles the popup UI and communication with the content script.
+ */
+
+// Debug mode - set to false for production
+const DEBUG_MODE = true;
+
+/**
+ * Debug logging function
+ */
 function debug(message) {
-    console.log(`[DOM Highlighter Popup] ${message}`);
+    if (DEBUG_MODE) {
+        console.log(`[DOM Highlighter Popup] ${message}`);
+    }
 }
 
 debug('Popup script loaded');
 
 document.addEventListener('DOMContentLoaded', function() {
+    //=============================================
+    // INITIALIZE UI ELEMENTS
+    //=============================================
     const toggleCheckbox = document.getElementById('highlightToggle');
     const downloadBtn = document.getElementById('downloadBtn');
     const elementIdInput = document.getElementById('elementId');
     const highlightElementBtn = document.getElementById('highlightElementBtn');
     const statusText = document.getElementById('statusText');
     
+    /**
+     * Updates the status message in the popup
+     */
     function updateStatus(message) {
         statusText.textContent = message;
     }
     
-    // Get the current tab
+    //=============================================
+    // COMMUNICATION FUNCTIONS
+    //=============================================
+    
+    /**
+     * Gets the current active tab
+     */
     function getCurrentTab(callback) {
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             if (tabs && tabs.length > 0) {
@@ -28,7 +52,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Send message to content script with retry
+    /**
+     * Sends a message to the content script with retry functionality
+     */
     function sendMessageToContentScript(message, callback, attempts = 0) {
         getCurrentTab(function(tab) {
             debug(`Sending message to tab ${tab.id}: ${JSON.stringify(message)}`);
@@ -70,7 +96,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize the popup
+    //=============================================
+    // INITIALIZATION
+    //=============================================
+    
+    /**
+     * Initializes the popup UI and state
+     */
     function initPopup() {
         debug('Initializing popup');
         updateStatus('Ready');
@@ -84,7 +116,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Add click handler for the toggle
+    //=============================================
+    // EVENT HANDLERS
+    //=============================================
+    
+    /**
+     * Handles toggling the highlight mode
+     */
     toggleCheckbox.addEventListener('change', function() {
         updateStatus(toggleCheckbox.checked ? 'Activating...' : 'Deactivating...');
         
@@ -104,7 +142,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Add download website tree handler
+    /**
+     * Handles downloading the website tree as JSON
+     */
     downloadBtn.addEventListener('click', function() {
         updateStatus('Generating website tree...');
         sendMessageToContentScript({action: 'downloadDomTree'}, function(response) {
@@ -116,7 +156,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Add highlight specific element handler
+    /**
+     * Handles highlighting a specific element by ID
+     */
     highlightElementBtn.addEventListener('click', function() {
         const elementId = elementIdInput.value.trim();
         if (!elementId) {
@@ -147,13 +189,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Also trigger highlight on Enter key in the input field
+    /**
+     * Handle keyboard input for element ID field
+     */
     elementIdInput.addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
             highlightElementBtn.click();
         }
     });
     
-    // Initialize
+    // Initialize the popup
     initPopup();
 }); 

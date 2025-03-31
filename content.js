@@ -1,3 +1,11 @@
+/**
+ * DOM Element Highlighter - Content Script
+ * This script handles all the DOM element highlighting and tree generation functionality.
+ */
+
+//=============================================
+// VARIABLES
+//=============================================
 let isHighlighting = false;
 let highlightContainer = null;
 let elementColorMap = new Map(); // Store colors for element types
@@ -5,15 +13,28 @@ let debounceTimer = null;
 let mutationDebounceTimer = null;
 let domElementsMap = new Map(); // Map to store dom elements by unique ID
 
-// Debug function
+// Debug mode - set to false for production
+const DEBUG_MODE = true;
+
+//=============================================
+// UTILITY FUNCTIONS
+//=============================================
+
+/**
+ * Debug logging function - only logs if debug mode is enabled
+ */
 function debug(message) {
-    console.log(`[DOM Highlighter] ${message}`);
+    if (DEBUG_MODE) {
+        console.log(`[DOM Highlighter] ${message}`);
+    }
 }
 
 // Log initial load
 debug('Content script loaded');
 
-// Function to get a random color
+/**
+ * Generates a random color for element highlighting
+ */
 function getRandomColor() {
     const letters = '0123456789ABCDEF';
     let color = '#';
@@ -23,7 +44,41 @@ function getRandomColor() {
     return color;
 }
 
-// Function to get DOM path for an element (for persistent identification)
+/**
+ * Creates a debounced function that delays invoking func until after wait milliseconds
+ */
+function debounce(func, delay) {
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            func.apply(context, args);
+        }, delay);
+    };
+}
+
+/**
+ * Simple string hashing function
+ */
+function hashString(str) {
+    let hash = 0;
+    if (str.length === 0) return hash;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
+}
+
+//=============================================
+// ELEMENT IDENTIFICATION
+//=============================================
+
+/**
+ * Gets the DOM path for an element for persistent identification
+ */
 function getDomPath(element) {
     const path = [];
     while (element && element.nodeType === Node.ELEMENT_NODE) {
@@ -53,7 +108,9 @@ function getDomPath(element) {
     return path.join(' > ');
 }
 
-// Function to generate a stable ID for DOM elements
+/**
+ * Generates a stable ID for DOM elements that persists across page reloads
+ */
 function generateStableId(element) {
     // Get basic element info
     const tagName = element.tagName.toLowerCase();
@@ -84,19 +141,9 @@ function generateStableId(element) {
     return `${tagName}${id ? '_id_' + id : ''}${classNames ? '_class_' + classNames : ''}${text ? '_text_' + text : ''}${attributes}_path_${domPathHash}`;
 }
 
-// Simple string hashing function
-function hashString(str) {
-    let hash = 0;
-    if (str.length === 0) return hash;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash).toString(36);
-}
-
-// Function to find element by stable ID
+/**
+ * Finds an element by its stable ID even after page reload
+ */
 function findElementByStableId(stableId) {
     debug(`Looking for element with stable ID: ${stableId}`);
     
@@ -169,7 +216,9 @@ function findElementByStableId(stableId) {
     return null;
 }
 
-// Function to get element signature (for consistent coloring)
+/**
+ * Gets element signature for consistent coloring
+ */
 function getElementSignature(element) {
     try {
         const classes = Array.from(element.classList || []).sort().join('.');
@@ -180,7 +229,9 @@ function getElementSignature(element) {
     }
 }
 
-// Function to get or create color for element type
+/**
+ * Gets or creates a color for an element type
+ */
 function getColorForElement(element) {
     const signature = getElementSignature(element);
     if (!elementColorMap.has(signature)) {
@@ -189,7 +240,13 @@ function getColorForElement(element) {
     return elementColorMap.get(signature);
 }
 
-// Function to create a container for highlights
+//=============================================
+// HIGHLIGHTING FUNCTIONS
+//=============================================
+
+/**
+ * Creates a container for all highlight elements
+ */
 function createHighlightContainer() {
     debug('Creating highlight container');
     try {
@@ -210,7 +267,9 @@ function createHighlightContainer() {
     }
 }
 
-// Function to create a bounding box element
+/**
+ * Creates a bounding box element for highlighting
+ */
 function createBoundingBox(element) {
     try {
         const rect = element.getBoundingClientRect();
@@ -239,19 +298,9 @@ function createBoundingBox(element) {
     }
 }
 
-// Debounce function to limit how often a function is called
-function debounce(func, delay) {
-    return function() {
-        const context = this;
-        const args = arguments;
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            func.apply(context, args);
-        }, delay);
-    };
-}
-
-// Function to update highlight positions (debounced)
+/**
+ * Update highlight positions on scroll/resize (debounced)
+ */
 const updateHighlightPositions = debounce(() => {
     if (!highlightContainer) return;
     
@@ -259,7 +308,9 @@ const updateHighlightPositions = debounce(() => {
     highlightElements();
 }, 100);
 
-// Function to highlight a specific element by ID
+/**
+ * Highlights a specific element by ID
+ */
 function highlightElementById(stableId) {
     debug(`Highlighting element with ID: ${stableId}`);
     
@@ -313,7 +364,9 @@ function highlightElementById(stableId) {
     return false;
 }
 
-// Function to highlight visible elements
+/**
+ * Highlights all visible elements
+ */
 function highlightElements() {
     debug('Highlighting elements');
     
@@ -335,10 +388,11 @@ function highlightElements() {
 
     // Get elements - start with a smaller set
     try {
-        const mainElements = document.querySelectorAll('div, p, h1, h2, h3, a, button');
+        // Select the most common important elements
+        const mainElements = document.querySelectorAll('div, p, h1, h2, h3, h4, h5, h6, a, button, img, input, form, section, article, nav, aside');
         debug(`Found ${mainElements.length} elements to highlight`);
         
-        // Process only the first 100 elements for now
+        // Process only the first 100 elements for now to prevent performance issues
         const elements = Array.from(mainElements).slice(0, 100);
         
         // Process elements immediately
@@ -359,7 +413,9 @@ function highlightElements() {
     }
 }
 
-// Function to remove all highlights
+/**
+ * Removes all highlights
+ */
 function removeHighlights() {
     debug('Removing highlights');
     
@@ -370,7 +426,9 @@ function removeHighlights() {
     }
 }
 
-// Function to toggle highlighting
+/**
+ * Toggles element highlighting
+ */
 function toggleHighlight(forceState = null) {
     debug(`Toggle highlight called with forceState: ${forceState}`);
     
@@ -391,7 +449,13 @@ function toggleHighlight(forceState = null) {
     return isHighlighting;
 }
 
-// Function to extract important information from an element
+//=============================================
+// DOM TREE GENERATION
+//=============================================
+
+/**
+ * Extracts important information from a DOM element
+ */
 function extractElementInfo(element) {
     // Generate a stable ID for this element
     const stableId = generateStableId(element);
@@ -474,7 +538,9 @@ function extractElementInfo(element) {
     return info;
 }
 
-// Function to generate a tree structure of the DOM
+/**
+ * Generates a tree structure of the DOM
+ */
 function generateDomTree(rootElement = document.body, maxDepth = 10, currentDepth = 0) {
     if (!rootElement || currentDepth > maxDepth) {
         return null;
@@ -503,7 +569,9 @@ function generateDomTree(rootElement = document.body, maxDepth = 10, currentDept
     return nodeInfo;
 }
 
-// Function to download the DOM tree as a JSON file
+/**
+ * Downloads the DOM tree as a JSON file
+ */
 function downloadDomTree() {
     debug('Generating DOM tree');
     
@@ -547,7 +615,13 @@ function downloadDomTree() {
     }
 }
 
-// Listen for messages from the popup
+//=============================================
+// EVENT HANDLERS
+//=============================================
+
+/**
+ * Message handler for communication with popup
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     debug(`Received message: ${JSON.stringify(request)}`);
     
@@ -577,7 +651,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 });
 
-// Debounced mutation handler
+/**
+ * Debounced mutation handler for DOM changes
+ */
 const handleMutation = debounce(() => {
     if (isHighlighting) {
         removeHighlights();
@@ -590,15 +666,7 @@ const observer = new MutationObserver(() => {
     handleMutation();
 });
 
-// Start observing the document with optimized parameters
-observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: false,
-    characterData: false
-});
-
-// Re-apply highlighting when navigation occurs within SPA
+// Listen for popstate events for SPA navigation
 window.addEventListener('popstate', () => {
     if (isHighlighting) {
         setTimeout(() => {
@@ -608,11 +676,26 @@ window.addEventListener('popstate', () => {
     }
 });
 
-// Make sure we have the document body before setting up
+//=============================================
+// INITIALIZATION
+//=============================================
+
+/**
+ * Makes sure we have the document body before setting up
+ */
 function initializeWhenReady() {
     debug('Initializing when ready');
     if (document.body) {
         debug('Document body is ready');
+        
+        // Setup mutation observer with optimized parameters
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: false,
+            characterData: false
+        });
+        
         // Test if we can create elements
         try {
             const testDiv = document.createElement('div');
