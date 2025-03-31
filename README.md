@@ -139,5 +139,3 @@ MIT License - See the [LICENSE](LICENSE) file for details.
 - Icon design created specifically for this project
 
 ---
-
-Made with ❤️ for web developers and educators 
