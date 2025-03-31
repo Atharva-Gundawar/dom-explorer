@@ -1,0 +1,11 @@
+{
+  "name": "dom-element-highlighter",
+  "version": "1.0.0",
+  "description": "Chrome extension to highlight DOM elements",
+  "scripts": {
+    "generate-icons": "node generate_icons.js"
+  },
+  "dependencies": {
+    "canvas": "^2.11.0"
+  }
+} 
