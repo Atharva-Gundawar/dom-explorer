@@ -132,9 +132,6 @@ function highlightElements() {
         return;
     }
 
-    // For testing, try a simple highlight first
-    simpleHighlight();
-
     // Get elements - start with a smaller set
     try {
         const mainElements = document.querySelectorAll('div, p, h1, h2, h3, a, button');
@@ -147,7 +144,7 @@ function highlightElements() {
         for (let i = 0; i < elements.length; i++) {
             const element = elements[i];
             // Skip our own elements
-            if (element.className === 'dom-highlight-box' || element.id === 'dom-highlight-container' || element.id === 'test-highlight-box') continue;
+            if (element.className === 'dom-highlight-box' || element.id === 'dom-highlight-container') continue;
             
             const box = createBoundingBox(element);
             if (box && highlightContainer) {
@@ -164,12 +161,6 @@ function highlightElements() {
 // Function to remove all highlights
 function removeHighlights() {
     debug('Removing highlights');
-    
-    // Remove test highlight if it exists
-    const testBox = document.getElementById('test-highlight-box');
-    if (testBox) {
-        testBox.remove();
-    }
     
     // Remove the container and all highlights
     if (highlightContainer) {
@@ -199,6 +190,151 @@ function toggleHighlight(forceState = null) {
     return isHighlighting;
 }
 
+// Function to extract important information from an element
+function extractElementInfo(element) {
+    const info = {
+        tag: element.tagName.toLowerCase(),
+        id: element.id || null,
+        classes: Array.from(element.classList || []),
+    };
+    
+    // Get element type-specific attributes
+    switch (info.tag) {
+        case 'a':
+            info.href = element.href || null;
+            info.text = element.innerText.trim() || null;
+            break;
+        case 'img':
+            info.src = element.src || null;
+            info.alt = element.alt || null;
+            info.width = element.width || null;
+            info.height = element.height || null;
+            break;
+        case 'button':
+        case 'h1':
+        case 'h2':
+        case 'h3':
+        case 'h4':
+        case 'h5':
+        case 'h6':
+        case 'p':
+        case 'span':
+        case 'div':
+        case 'li':
+            info.text = element.innerText.trim() || null;
+            break;
+        case 'input':
+            info.type = element.type || null;
+            info.placeholder = element.placeholder || null;
+            info.value = element.value || null;
+            break;
+        case 'form':
+            info.action = element.action || null;
+            info.method = element.method || null;
+            break;
+    }
+    
+    // Get computed style information for layout
+    try {
+        const style = window.getComputedStyle(element);
+        info.style = {
+            display: style.display,
+            position: style.position,
+            width: style.width,
+            height: style.height,
+            color: style.color,
+            backgroundColor: style.backgroundColor
+        };
+    } catch (e) {
+        debug(`Error getting computed style: ${e.message}`);
+    }
+    
+    // Get bounding box
+    try {
+        const rect = element.getBoundingClientRect();
+        info.rect = {
+            top: rect.top + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width,
+            height: rect.height
+        };
+    } catch (e) {
+        debug(`Error getting bounding rect: ${e.message}`);
+    }
+    
+    return info;
+}
+
+// Function to generate a tree structure of the DOM
+function generateDomTree(rootElement = document.body, maxDepth = 10, currentDepth = 0) {
+    if (!rootElement || currentDepth > maxDepth) {
+        return null;
+    }
+    
+    const nodeInfo = extractElementInfo(rootElement);
+    nodeInfo.children = [];
+    
+    // Skip certain elements that don't add much value
+    if (rootElement.tagName.toLowerCase() === 'script' || 
+        rootElement.tagName.toLowerCase() === 'style' || 
+        rootElement.tagName.toLowerCase() === 'meta' ||
+        rootElement.id === 'dom-highlight-container') {
+        return null;
+    }
+    
+    // Process children
+    for (let i = 0; i < rootElement.children.length; i++) {
+        const childElement = rootElement.children[i];
+        const childInfo = generateDomTree(childElement, maxDepth, currentDepth + 1);
+        if (childInfo) {
+            nodeInfo.children.push(childInfo);
+        }
+    }
+    
+    return nodeInfo;
+}
+
+// Function to download the DOM tree as a JSON file
+function downloadDomTree() {
+    debug('Generating DOM tree');
+    
+    try {
+        // Generate the DOM tree with a reasonable depth limit
+        const tree = {
+            title: document.title,
+            url: window.location.href,
+            timestamp: new Date().toISOString(),
+            tree: generateDomTree(document.body, 5)
+        };
+        
+        // Convert to JSON
+        const jsonString = JSON.stringify(tree, null, 2);
+        
+        // Create a Blob and download link
+        const blob = new Blob([jsonString], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        
+        // Create a link and trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `website-tree-${window.location.hostname}-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        debug('DOM tree download initiated');
+        return true;
+    } catch (e) {
+        debug(`Error generating DOM tree: ${e.message}`);
+        return false;
+    }
+}
+
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     debug(`Received message: ${JSON.stringify(request)}`);
@@ -212,9 +348,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             case 'getState':
                 sendResponse({isHighlighting});
                 break;
-            case 'testHighlight':
-                simpleHighlight();
-                sendResponse({success: true});
+            case 'downloadDomTree':
+                const success = downloadDomTree();
+                sendResponse({success});
                 break;
         }
     } catch (e) {
@@ -292,26 +428,4 @@ chrome.runtime.sendMessage({action: 'contentScriptReady'}, response => {
     if (response) {
         debug('Background received ready message: ' + JSON.stringify(response));
     }
-});
-
-// Simple highlight function (for testing)
-function simpleHighlight() {
-    debug('Running simple highlight test');
-    try {
-        // Create a simple red border around the body
-        const testBox = document.createElement('div');
-        testBox.style.position = 'fixed';
-        testBox.style.top = '10px';
-        testBox.style.left = '10px';
-        testBox.style.width = '100px';
-        testBox.style.height = '100px';
-        testBox.style.border = '5px solid red';
-        testBox.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
-        testBox.style.zIndex = '10001';
-        testBox.id = 'test-highlight-box';
-        document.body.appendChild(testBox);
-        debug('Test highlight created');
-    } catch (e) {
-        debug('Error in simple highlight: ' + e.message);
-    }
-} 
+}); 

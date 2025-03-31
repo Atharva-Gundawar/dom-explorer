@@ -13,11 +13,17 @@ document.addEventListener('DOMContentLoaded', function() {
     statusText.style.color = '#666';
     document.body.appendChild(statusText);
     
-    const testBtn = document.createElement('button');
-    testBtn.textContent = 'Test Highlight';
-    testBtn.style.marginTop = '10px';
-    testBtn.style.padding = '5px 10px';
-    document.body.appendChild(testBtn);
+    const downloadBtn = document.createElement('button');
+    downloadBtn.textContent = 'Download Website Tree';
+    downloadBtn.style.marginTop = '10px';
+    downloadBtn.style.padding = '5px 10px';
+    downloadBtn.style.width = '100%';
+    downloadBtn.style.backgroundColor = '#4285f4';
+    downloadBtn.style.color = 'white';
+    downloadBtn.style.border = 'none';
+    downloadBtn.style.borderRadius = '4px';
+    downloadBtn.style.cursor = 'pointer';
+    document.body.appendChild(downloadBtn);
     
     function updateStatus(message) {
         statusText.textContent = message;
@@ -108,14 +114,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Add test button handler
-    testBtn.addEventListener('click', function() {
-        updateStatus('Testing highlight...');
-        sendMessageToContentScript({action: 'testHighlight'}, function(response) {
+    // Add download website tree handler
+    downloadBtn.addEventListener('click', function() {
+        updateStatus('Generating website tree...');
+        sendMessageToContentScript({action: 'downloadDomTree'}, function(response) {
             if (response && response.success) {
-                updateStatus('Test box created');
+                updateStatus('Website tree downloaded');
             } else {
-                updateStatus('Test failed');
+                updateStatus(response && response.error ? response.error : 'Failed to generate tree');
             }
         });
     });
