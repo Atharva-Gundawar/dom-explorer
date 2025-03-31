@@ -124,19 +124,26 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Uncheck the highlight all checkbox
-        toggleCheckbox.checked = false;
-        
-        updateStatus(`Highlighting element: ${elementId}...`);
+        // First, ensure "Highlight All" is turned off
         sendMessageToContentScript({
-            action: 'highlightElementById',
-            elementId: elementId
-        }, function(response) {
-            if (response && response.success) {
-                updateStatus(`Element highlighted: ${elementId}`);
-            } else {
-                updateStatus(response && response.error ? response.error : `Element not found: ${elementId}`);
-            }
+            action: 'toggleHighlight',
+            forceState: false
+        }, function() {
+            // Update the checkbox state
+            toggleCheckbox.checked = false;
+            
+            // Now highlight the specific element
+            updateStatus(`Highlighting element: ${elementId}...`);
+            sendMessageToContentScript({
+                action: 'highlightElementById',
+                elementId: elementId
+            }, function(response) {
+                if (response && response.success) {
+                    updateStatus(`Element highlighted: ${elementId}`);
+                } else {
+                    updateStatus(response && response.error ? response.error : `Element not found: ${elementId}`);
+                }
+            });
         });
     });
     

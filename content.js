@@ -23,9 +23,150 @@ function getRandomColor() {
     return color;
 }
 
-// Function to generate a unique ID for DOM elements
-function generateUniqueId() {
-    return 'dom_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+// Function to get DOM path for an element (for persistent identification)
+function getDomPath(element) {
+    const path = [];
+    while (element && element.nodeType === Node.ELEMENT_NODE) {
+        let selector = element.nodeName.toLowerCase();
+        if (element.id) {
+            selector += `#${element.id}`;
+            path.unshift(selector);
+            break;
+        } else {
+            let sibling = element;
+            let siblingIndex = 1;
+            while (sibling = sibling.previousElementSibling) {
+                if (sibling.nodeName.toLowerCase() === selector) {
+                    siblingIndex++;
+                }
+            }
+            
+            if (element.className) {
+                selector += `.${Array.from(element.classList).join('.')}`;
+            }
+            
+            selector += `:nth-child(${siblingIndex})`;
+        }
+        path.unshift(selector);
+        element = element.parentNode;
+    }
+    return path.join(' > ');
+}
+
+// Function to generate a stable ID for DOM elements
+function generateStableId(element) {
+    // Get basic element info
+    const tagName = element.tagName.toLowerCase();
+    const id = element.id || '';
+    const classNames = Array.from(element.classList || []).join('.');
+    const text = element.innerText ? element.innerText.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_') : '';
+    
+    // Get attributes based on element type
+    let attributes = '';
+    switch (tagName) {
+        case 'a':
+            attributes = element.href ? `_href_${element.href.replace(/[^a-zA-Z0-9]/g, '_').substr(-30)}` : '';
+            break;
+        case 'img':
+            attributes = element.src ? `_src_${element.src.replace(/[^a-zA-Z0-9]/g, '_').substr(-30)}` : '';
+            break;
+        case 'input':
+            attributes = element.name ? `_name_${element.name}` : '';
+            attributes += element.placeholder ? `_placeholder_${element.placeholder.replace(/[^a-zA-Z0-9]/g, '_').substr(0, 20)}` : '';
+            break;
+    }
+    
+    // Use DOM path for more precise identification
+    const domPath = getDomPath(element);
+    const domPathHash = hashString(domPath);
+    
+    // Combine all information into a stable ID
+    return `${tagName}${id ? '_id_' + id : ''}${classNames ? '_class_' + classNames : ''}${text ? '_text_' + text : ''}${attributes}_path_${domPathHash}`;
+}
+
+// Simple string hashing function
+function hashString(str) {
+    let hash = 0;
+    if (str.length === 0) return hash;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
+}
+
+// Function to find element by stable ID
+function findElementByStableId(stableId) {
+    debug(`Looking for element with stable ID: ${stableId}`);
+    
+    // Extract tag name from the stable ID
+    const tagMatch = stableId.match(/^([a-z0-9]+)/);
+    if (!tagMatch) return null;
+    
+    const tagName = tagMatch[1];
+    
+    // Check if we have an ID in the stable ID
+    const idMatch = stableId.match(/_id_([^_]+)/);
+    if (idMatch) {
+        const elementId = idMatch[1];
+        const element = document.getElementById(elementId);
+        if (element && element.tagName.toLowerCase() === tagName) {
+            debug(`Found element by ID: ${elementId}`);
+            return element;
+        }
+    }
+    
+    // Extract path hash from stable ID
+    const pathMatch = stableId.match(/_path_([^_]+)/);
+    if (!pathMatch) return null;
+    
+    // Get all elements of the tag type and check each one
+    const elements = document.getElementsByTagName(tagName);
+    for (let i = 0; i < elements.length; i++) {
+        const element = elements[i];
+        const elementPath = getDomPath(element);
+        const elementPathHash = hashString(elementPath);
+        
+        if (pathMatch[1] === elementPathHash) {
+            debug(`Found element by path hash: ${elementPathHash}`);
+            return element;
+        }
+    }
+    
+    // If still not found, try with more relaxed criteria
+    debug(`Element not found by direct match, trying with more relaxed criteria`);
+    
+    // Extract class from stable ID
+    const classMatch = stableId.match(/_class_([^_]+)/);
+    const textMatch = stableId.match(/_text_([^_]+)/);
+    
+    if (classMatch || textMatch) {
+        for (let i = 0; i < elements.length; i++) {
+            const element = elements[i];
+            
+            // Check class match
+            if (classMatch) {
+                const classNames = classMatch[1];
+                const elementClasses = Array.from(element.classList || []).join('.');
+                if (elementClasses !== classNames) continue;
+            }
+            
+            // Check text content match
+            if (textMatch) {
+                const textContent = textMatch[1];
+                const elementText = element.innerText ? element.innerText.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '_') : '';
+                if (elementText !== textContent) continue;
+            }
+            
+            // If we get here, we have a potential match
+            debug(`Found element by partial match (class/text)`);
+            return element;
+        }
+    }
+    
+    debug(`Element not found: ${stableId}`);
+    return null;
 }
 
 // Function to get element signature (for consistent coloring)
@@ -119,8 +260,8 @@ const updateHighlightPositions = debounce(() => {
 }, 100);
 
 // Function to highlight a specific element by ID
-function highlightElementById(uniqueId) {
-    debug(`Highlighting element with ID: ${uniqueId}`);
+function highlightElementById(stableId) {
+    debug(`Highlighting element with ID: ${stableId}`);
     
     // Safety check for document.body
     if (!document.body) {
@@ -132,9 +273,9 @@ function highlightElementById(uniqueId) {
     removeHighlights();
     
     // Try to find the element
-    const element = domElementsMap.get(uniqueId);
+    const element = findElementByStableId(stableId);
     if (!element) {
-        debug(`Element with ID ${uniqueId} not found`);
+        debug(`Element with ID ${stableId} not found`);
         return false;
     }
     
@@ -159,6 +300,9 @@ function highlightElementById(uniqueId) {
                 behavior: 'smooth',
                 block: 'center'
             });
+            
+            // Set highlighting state to false (since we're in single-element mode)
+            isHighlighting = false;
             
             return true;
         }
@@ -249,17 +393,18 @@ function toggleHighlight(forceState = null) {
 
 // Function to extract important information from an element
 function extractElementInfo(element) {
-    // Generate a unique ID for this element
-    const uniqueId = generateUniqueId();
+    // Generate a stable ID for this element
+    const stableId = generateStableId(element);
     
-    // Store a reference to the element for later highlighting
-    domElementsMap.set(uniqueId, element);
+    // Store a reference to the element for later highlighting (useful during the same session)
+    domElementsMap.set(stableId, element);
     
     const info = {
-        uniqueId: uniqueId,
+        uniqueId: stableId,
         tag: element.tagName.toLowerCase(),
         id: element.id || null,
         classes: Array.from(element.classList || []),
+        path: getDomPath(element)
     };
     
     // Get element type-specific attributes
